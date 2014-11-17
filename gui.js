@@ -196,7 +196,7 @@ IDE_Morph.prototype.init = function (isAutoFill) {
     this.globalVariables = new VariableFrame();
     this.currentSprite = new SpriteMorph(this.globalVariables);
     this.shareBoxPlaceholderSprite = new SpriteMorph(this.globalVariables);
-    this.sprites = new List([this.currentSprite, this.shareBoxPlaceholderSprite]);
+    this.sprites = new List([this.currentSprite]);
     this.currentCategory = 'motion';
     this.currentTab = 'scripts';
 	this.currentShareBoxTab = 'scripts';
@@ -1292,7 +1292,7 @@ IDE_Morph.prototype.createCorralBar = function () {
     librarybutton = new PushButtonMorph(
         this,
         "openLibrary",
-        new SymbolMorph('pipette', 15)
+        new SymbolMorph('flash', 15)
     );
 	librarybutton.texture = 'librarybutton.png';
     librarybutton.corner = 12;
@@ -1552,12 +1552,10 @@ IDE_Morph.prototype.createShareBoxBar = function () {
     //myself.fixLayout();
 };
 
-IDE_Morph.shareBoxPrototypeFunctionality = function(myself) {
-    // First Screen: Script drag behavior to load the next screen for naming.
-    // Override default behavior
-    var shareBoxBGEmpty = new Morph();
-    shareBoxBGEmpty.texture = 'images/sharebox_prototype.png';
-    shareBoxBGEmpty.drawNew = function () {
+function drawShareBoxPrototypeUsingImage(myself, image) {
+    var sharebox = new Morph();
+    sharebox.texture = image;
+    sharebox.drawNew = function () {
         this.image = newCanvas(this.extent());
         var context = this.image.getContext('2d');
         var picBgColor = myself.shareBox.color;
@@ -1567,9 +1565,28 @@ IDE_Morph.shareBoxPrototypeFunctionality = function(myself) {
             this.drawTexture(this.texture);
         }
     };
-    shareBoxBGEmpty.setExtent(new Point(448, 265));
-    shareBoxBGEmpty.setLeft(this.stage.width()/2 - shareBoxBGEmpty.width()/2);
-    shareBoxBGEmpty.setTop(-2);
+    sharebox.setExtent(new Point(448, 265));
+    sharebox.setLeft(this.stage.width() / 2 - sharebox.width() / 2);
+    sharebox.setTop(-2);
+    return sharebox;
+}
+
+function buildInvisibleButton(action, point, left, top) {
+    var button = new TriggerMorph(
+        this,
+        action,
+        "", 10, 'sans serif', null);
+    button.setExtent(point);
+    button.setLeft(left);
+    button.setTop(top);
+    button.setAlphaScaled(0);
+    return button;
+}
+
+IDE_Morph.shareBoxPrototypeFunctionality = function(myself) {
+    // First Screen: Script drag behavior to load the next screen for naming.
+    // Override default behavior
+    var shareBoxBGEmpty = drawShareBoxPrototypeUsingImage.call(this, myself, 'images/sharebox_prototype.png');
     this.shareBox.add(shareBoxBGEmpty);
 
     this.shareBox.reactToDropOf = function (droppedMorph) {
@@ -1622,23 +1639,34 @@ IDE_Morph.shareBoxPrototypeFunctionality = function(myself) {
     this.scriptListScreen.color = this.shareBox.color;
     this.add(this.scriptListScreen);
 
-    var shareBoxBG = new Morph();
-    shareBoxBG.texture = 'images/sharebox_prototype_add.png';
-    shareBoxBG.drawNew = function () {
-        this.image = newCanvas(this.extent());
-        var context = this.image.getContext('2d');
-        var picBgColor = myself.shareBox.color;
-        context.fillStyle = picBgColor.toString();
-        context.fillRect(0, 0, this.width(), this.height());
-        if (this.texture) {
-            this.drawTexture(this.texture);
-        }
-    };
-    shareBoxBG.setExtent(new Point(448, 265));
-    shareBoxBG.setLeft(this.stage.width()/2 - shareBoxBG.width()/2);
-    shareBoxBG.setTop(-2);
-    this.scriptListScreen.add(shareBoxBG);
 
+    // Button to fake-sync
+    var fakeSyncButton = buildInvisibleButton.call(this,
+        function () {
+            this.scriptListScreen.show();
+        },
+        new Point(20, 20), 0, 0);
+    this.shareBox.add(fakeSyncButton);
+
+    // Scripts before
+    var shareBoxBG = drawShareBoxPrototypeUsingImage.call(this, myself, 'images/sharebox_prototype_add.png');
+    shareBoxBG.hide();
+
+    var shareBoxCloseScript = drawShareBoxPrototypeUsingImage.call(this, myself, 'images/sharebox_prototype_close.png');
+
+    // Button to simulate accordion behavior
+    var hiddenButton = buildInvisibleButton.call(this,
+        function () {
+            if (shareBoxBG.isVisible == false) {
+                shareBoxBG.show();
+            } else {
+                shareBoxBG.hide();
+            }
+        },
+        new Point(20, 20), 42, 130);
+    this.scriptListScreen.add(shareBoxCloseScript);
+    this.scriptListScreen.add(shareBoxBG);
+    this.scriptListScreen.add(hiddenButton);
     this.scriptListScreen.hide();
 }
 
@@ -1678,10 +1706,9 @@ IDE_Morph.prototype.createShareBox = function () {
 
 		// Executes shareBox prototype functionality. To be modified/deleted thereafter
 		IDE_Morph.shareBoxPrototypeFunctionality.call(this, myself);
-	} else if(currentShareBoxTab === 'assets'){
-		use, dra
+	} else if(this.currentShareBoxTab === 'assets'){
 		this.shareBox = new WardrobeMorph(
-            this.currentSprite,
+            this.shareBoxPlaceholderSprite,
             this.sliderColor
         );
         this.shareBox.color = this.groupColor;
@@ -1842,6 +1869,7 @@ function Countdown(options) {
     };
 
     this.stop = function () {
+        seconds = options.seconds;
         clearInterval(timer);
     };
 
@@ -1925,6 +1953,28 @@ IDE_Morph.prototype.createShareBoxConnect = function () {
     inputUser.setPosition(new Point(this.stage.width()/2 - inputUser.width()/2 - addPartnerLogo.width()/5 + padding*2, txt.bottom() + padding));
     this.addPartnerScreen.add(inputUser);
 
+    // screen 1: INITIALIZE Counter
+
+    var replyCounter = new Countdown({
+        seconds: 4,  // number of seconds to count down
+        onUpdateStatus: function(sec) {
+            if (!cancelButtonPressed) {
+                // console.log(sec);
+                countdownTxt.updateText("Time out in " + sec + " seconds");
+
+            } else {
+                console.log("Cancelled, stopping timer.");
+                this.stop();
+            }
+        }, // callback for each second
+        onCounterEnd: function() {
+            if (!cancelButtonPressed) {
+                myself.addPartnerScreen.show();
+                myself.awaitingReplyScreen.hide();
+            }
+        } // send back to add partner
+    });
+
     // screen 1: ADD A PARTNER Go button
     goButton = new PushButtonMorph(null, null, "Go", null, null, null);
     goButton.color = new Color(60, 158, 0);
@@ -1934,29 +1984,8 @@ IDE_Morph.prototype.createShareBoxConnect = function () {
     goButton.action = function() {
         myself.addPartnerScreen.hide();
         myself.awaitingReplyScreen.show();
-
+        countdownTxt.updateText("Time out in" + " 5 " + "seconds");        // initialize displayed countdown value
         // start the expire timer
-        var replyCounter = new Countdown({
-            seconds: 5,  // number of seconds to count down
-            onUpdateStatus: function(sec) {
-
-                if (!cancelButtonPressed) {
-                    console.log(sec);
-                    // xinni: how to make this text morph refresh to countdown the seconds?
-                    countdownTxt.text = "Time out in " + sec + " seconds";
-                } else {
-                    console.log("Cancelled, stopping timer.");
-                    this.stop();
-                }
-            }, // callback for each second
-            onCounterEnd: function() {
-                if (!cancelButtonPressed) {
-                    myself.addPartnerScreen.show();
-                    myself.awaitingReplyScreen.hide();
-                }
-            } // send back to add partner
-        });
-
         replyCounter.start();
         console.log("Starting counter, resetting cancelled back to false.")
         cancelButtonPressed = false;
@@ -2023,6 +2052,7 @@ IDE_Morph.prototype.createShareBoxConnect = function () {
     cancelButton.action = function() {
         console.log("Cancel button pressed.");
         cancelButtonPressed = true;
+        replyCounter.stop();
         myself.addPartnerScreen.show();
         myself.awaitingReplyScreen.hide();
     };
